@@ -1,8 +1,5 @@
 import { createClient, type Client, type InValue } from "@libsql/client";
 
-const url = process.env.TURSO_DATABASE_URL ?? "file:./data/app.db";
-const authToken = process.env.TURSO_AUTH_TOKEN;
-
 declare global {
   // eslint-disable-next-line no-var
   var __client: Client | undefined;
@@ -10,21 +7,37 @@ declare global {
   var __dbInitDone: boolean | undefined;
 }
 
-const client: Client =
-  global.__client ??
-  createClient({
+/**
+ * Lazy client factory.
+ *
+ * We MUST NOT construct the libsql client at module-load time. Next.js
+ * imports route modules during the build's "Collecting page data" phase,
+ * and on Vercel the build FS is read-only — opening the default
+ * `file:./data/app.db` URL would throw `ConnectionFailed`.
+ *
+ * By creating the client only on the first actual query, the build never
+ * touches the database, and at runtime each route reuses a cached
+ * instance via the `global.__client` singleton.
+ */
+function getClient(): Client {
+  if (global.__client) return global.__client;
+
+  const url = process.env.TURSO_DATABASE_URL ?? "file:./data/app.db";
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+
+  const c = createClient({
     url,
     ...(authToken ? { authToken } : {}),
   });
 
-if (process.env.NODE_ENV !== "production") {
-  global.__client = client;
+  global.__client = c;
+  return c;
 }
 
 async function ensureSchema(): Promise<void> {
   if (global.__dbInitDone) return;
 
-  await client.execute(`
+  await getClient().execute(`
     CREATE TABLE IF NOT EXISTS members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -38,12 +51,12 @@ async function ensureSchema(): Promise<void> {
 
   // Idempotent migration: ensure 'priority' column on members
   try {
-    const cols = await client.execute(`PRAGMA table_info(members)`);
+    const cols = await getClient().execute(`PRAGMA table_info(members)`);
     const hasPriority = cols.rows.some(
       (r) => (r.name as string) === "priority"
     );
     if (!hasPriority) {
-      await client.execute(
+      await getClient().execute(
         `ALTER TABLE members ADD COLUMN priority TEXT NOT NULL DEFAULT ''`
       );
     }
@@ -51,7 +64,7 @@ async function ensureSchema(): Promise<void> {
     // ignore
   }
 
-  await client.execute(`
+  await getClient().execute(`
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id INTEGER NOT NULL,
@@ -65,7 +78,7 @@ async function ensureSchema(): Promise<void> {
     )
   `);
 
-  await client.execute(`
+  await getClient().execute(`
     CREATE TABLE IF NOT EXISTS questions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id INTEGER NOT NULL,
@@ -78,7 +91,7 @@ async function ensureSchema(): Promise<void> {
     )
   `);
 
-  await client.execute(`
+  await getClient().execute(`
     CREATE TABLE IF NOT EXISTS checkins (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id INTEGER NOT NULL,
@@ -91,7 +104,7 @@ async function ensureSchema(): Promise<void> {
     )
   `);
 
-  await client.execute(`
+  await getClient().execute(`
     CREATE TABLE IF NOT EXISTS answers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       checkin_id INTEGER NOT NULL,
@@ -103,10 +116,10 @@ async function ensureSchema(): Promise<void> {
     )
   `);
 
-  await client.execute(
+  await getClient().execute(
     `CREATE INDEX IF NOT EXISTS idx_tasks_member ON tasks(member_id, status)`
   );
-  await client.execute(
+  await getClient().execute(
     `CREATE INDEX IF NOT EXISTS idx_checkins_member_date ON checkins(member_id, date)`
   );
 
@@ -131,17 +144,17 @@ function prepare<R = Record<string, unknown>>(
   return {
     async all(...args: Args) {
       await ensureSchema();
-      const res = await client.execute({ sql, args: toInValues(args) });
+      const res = await getClient().execute({ sql, args: toInValues(args) });
       return res.rows as unknown as R[];
     },
     async get(...args: Args) {
       await ensureSchema();
-      const res = await client.execute({ sql, args: toInValues(args) });
+      const res = await getClient().execute({ sql, args: toInValues(args) });
       return (res.rows[0] as unknown as R) ?? undefined;
     },
     async run(...args: Args) {
       await ensureSchema();
-      const res = await client.execute({ sql, args: toInValues(args) });
+      const res = await getClient().execute({ sql, args: toInValues(args) });
       return {
         lastInsertRowid: Number(res.lastInsertRowid ?? 0),
         changes: res.rowsAffected,
@@ -152,7 +165,9 @@ function prepare<R = Record<string, unknown>>(
 
 export const db = {
   prepare,
-  raw: client,
+  get raw(): Client {
+    return getClient();
+  },
   ensureSchema,
 };
 
