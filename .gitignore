@@ -1,0 +1,14 @@
+# deps
+/node_modules
+# next
+/.next/
+/out/
+# env
+.env*.local
+.env
+# data
+/data/*.db
+/data/*.db-*
+# misc
+.DS_Store
+*.log

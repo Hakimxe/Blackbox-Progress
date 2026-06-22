@@ -1,0 +1,182 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #0a0a0a;
+  color: #e6e6e6;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Subtle hairline grid in the body background — gives the HUD feel */
+body {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+/* Selection in orange */
+::selection {
+  background: #ff7a1a;
+  color: #0a0a0a;
+}
+
+/* Scrollbar — minimal, dark */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Component utilities ──────────────────────────────────────────────── */
+
+/* Sharp-edged dark panel */
+.bbx-panel {
+  background: #101010;
+  border: 1px solid #1f1f1f;
+}
+.bbx-panel-raised {
+  background: #161616;
+  border: 1px solid #1f1f1f;
+}
+
+/* Terminal-style panel header */
+.bbx-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1f1f1f;
+  background: #0c0c0c;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+/* Hairline divider */
+.bbx-hr {
+  border-top: 1px solid #1f1f1f;
+}
+
+/* Tiny uppercase label */
+.bbx-label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+
+/* Input baseline — sharp, dark, orange focus */
+.bbx-input {
+  width: 100%;
+  background: #0a0a0a;
+  border: 1px solid #1f1f1f;
+  color: #e6e6e6;
+  padding: 10px 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.bbx-input::placeholder {
+  color: #4a4a4a;
+}
+.bbx-input:focus {
+  border-color: #ff7a1a;
+  box-shadow: 0 0 0 1px #ff7a1a;
+}
+.bbx-input:disabled {
+  background: #0c0c0c;
+  color: #6b6b6b;
+}
+
+/* Primary button — orange */
+.bbx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #ff7a1a;
+  color: #0a0a0a;
+  border: 1px solid #ff7a1a;
+  padding: 10px 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 12px;
+  cursor: pointer;
+  transition: filter 120ms ease, transform 80ms ease;
+}
+.bbx-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.bbx-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.bbx-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Ghost button — outlined */
+.bbx-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  color: #e6e6e6;
+  border: 1px solid #2a2a2a;
+  padding: 8px 12px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+.bbx-btn-ghost:hover {
+  border-color: #ff7a1a;
+  color: #ff7a1a;
+}
+
+/* Danger ghost */
+.bbx-btn-danger {
+  background: transparent;
+  color: #f85149;
+  border: 1px solid #2a2a2a;
+}
+.bbx-btn-danger:hover {
+  border-color: #f85149;
+}
+
+/* Status dot */
+.bbx-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+}
+
+/* Numbers — slightly larger, tabular */
+.bbx-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
