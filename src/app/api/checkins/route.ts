@@ -22,19 +22,15 @@ export async function POST(req: Request) {
 
   const date = typeof body.date === "string" && body.date ? body.date : ymd();
 
-  // Find or create checkin for the day
+  // Find or create checkin for the day.
+  // NOTE: the `locked` flag is kept (still flipped to 1 on submit so we can show
+  // "SUBMITTED" state) but it no longer prevents the same member from updating
+  // their own answers later in the day. People asked for the ability to edit.
   let checkin = await db
     .prepare<Checkin>(
       `SELECT * FROM checkins WHERE member_id = ? AND date = ?`
     )
     .get(member.id, date);
-
-  if (checkin && checkin.locked) {
-    return NextResponse.json(
-      { error: "already submitted and locked" },
-      { status: 409 }
-    );
-  }
 
   if (!checkin) {
     const ins = await db

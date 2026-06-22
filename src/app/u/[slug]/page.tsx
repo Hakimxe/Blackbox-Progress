@@ -7,9 +7,11 @@ import ProgressRing from "@/components/ProgressRing";
 import { Panel } from "@/components/Panel";
 import {
   calcStreak,
+  daysAgo,
   pct,
   prettyDate,
   relDay,
+  relTime,
   todayLong,
   ymd,
 } from "@/lib/utils";
@@ -27,6 +29,7 @@ type Task = {
   member_id: number;
   title: string;
   status: "todo" | "doing" | "done";
+  created_at?: string;
 };
 type Question = {
   id: number;
@@ -34,7 +37,12 @@ type Question = {
   type: "number" | "text" | "yes_no";
   active: number;
 };
-type Checkin = { id: number; date: string; locked: number };
+type Checkin = {
+  id: number;
+  date: string;
+  locked: number;
+  updated_at?: string;
+};
 type Answer = {
   id: number;
   checkin_id: number;
@@ -59,6 +67,9 @@ export default function PublicMemberPage() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmStep, setConfirmStep] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  // `editMode` lets a member re-open today's already-submitted check-in
+  // to fix or add to their answers. They can update as many times as they want.
+  const [editMode, setEditMode] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const today = ymd();
@@ -184,6 +195,7 @@ export default function PublicMemberPage() {
     }
     setJustSubmitted(true);
     setTimeout(() => setJustSubmitted(false), 2500);
+    setEditMode(false);
     // Silent re-fetch so the page just updates state in place, no scroll jump.
     fetchData({ silent: true });
   }
@@ -380,22 +392,50 @@ export default function PublicMemberPage() {
             <div className="absolute inset-0 pointer-events-none">
               <div className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-bbx-good/10 to-transparent animate-scan" />
             </div>
-            <div className="p-5 flex items-center gap-4 relative">
+            <div className="p-5 flex items-center gap-4 relative flex-wrap">
               <div className="h-10 w-10 border border-bbx-good text-bbx-good grid place-items-center text-base">
                 ✓
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <p className="text-bbx-good font-semibold tracking-[0.14em] text-sm">
-                  SUBMITTED · LOCKED FOR TODAY
+                  SUBMITTED{editMode ? " · EDITING" : ""}
                 </p>
                 <p className="text-[11px] text-bbx-dim mt-1 tracking-wide">
-                  See you tomorrow with a fresh form.
+                  {editMode
+                    ? "Make your changes below and tap UPDATE to save."
+                    : todayCheckin?.updated_at
+                    ? `Updated ${relTime(todayCheckin.updated_at)} · you can still edit anytime today.`
+                    : "You can still edit anytime today."}
                 </p>
               </div>
               {justSubmitted && (
                 <span className="text-bbx-good text-xs tracking-[0.18em] animate-pop">
                   ✓ DONE
                 </span>
+              )}
+              {!editMode && !justSubmitted && (
+                <button
+                  onClick={() => {
+                    // Seed the draft with the current answers so the user
+                    // sees what they wrote and only changes what they want.
+                    if (!data || !todayCheckin) return;
+                    const d: Record<number, string> = {};
+                    for (const q of activeQuestions) {
+                      const a = data.answers.find(
+                        (x) =>
+                          x.checkin_id === todayCheckin.id &&
+                          x.question_id === q.id
+                      );
+                      d[q.id] = a?.value ?? "";
+                    }
+                    setDraft(d);
+                    setEditMode(true);
+                    setConfirmStep(false);
+                  }}
+                  className="bbx-btn-ghost"
+                >
+                  EDIT MY ANSWERS
+                </button>
               )}
             </div>
           </div>
@@ -450,7 +490,7 @@ export default function PublicMemberPage() {
                   idx={idx}
                   value={draft[q.id] ?? ""}
                   onChange={(v) => setDraft({ ...draft, [q.id]: v })}
-                  disabled={isLocked}
+                  disabled={isLocked && !editMode}
                 />
               ))}
 
@@ -460,27 +500,55 @@ export default function PublicMemberPage() {
                 </div>
               )}
 
-              {!isLocked && (
+              {(!isLocked || editMode) && (
                 <div className="p-4 border-t border-bbx-line bg-bbx-panel2/40">
                   {!confirmStep ? (
-                    <button
-                      onClick={() => setConfirmStep(true)}
-                      disabled={answeredCount === 0}
-                      className="bbx-btn w-full"
-                    >
-                      {answeredCount < activeQuestions.length
-                        ? `REVIEW & SUBMIT (${answeredCount}/${activeQuestions.length}) ▶`
-                        : "REVIEW & SUBMIT ▶"}
-                    </button>
+                    <div className="flex gap-2">
+                      {editMode && (
+                        <button
+                          onClick={() => {
+                            // Cancel edit — restore draft from saved answers
+                            // and exit edit mode without saving.
+                            if (data && todayCheckin) {
+                              const d: Record<number, string> = {};
+                              for (const q of activeQuestions) {
+                                const a = data.answers.find(
+                                  (x) =>
+                                    x.checkin_id === todayCheckin.id &&
+                                    x.question_id === q.id
+                                );
+                                d[q.id] = a?.value ?? "";
+                              }
+                              setDraft(d);
+                            }
+                            setEditMode(false);
+                          }}
+                          className="bbx-btn-ghost"
+                        >
+                          ◀ CANCEL
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setConfirmStep(true)}
+                        disabled={answeredCount === 0}
+                        className="bbx-btn flex-1"
+                      >
+                        {editMode
+                          ? `REVIEW & UPDATE (${answeredCount}/${activeQuestions.length}) ▶`
+                          : answeredCount < activeQuestions.length
+                          ? `REVIEW & SUBMIT (${answeredCount}/${activeQuestions.length}) ▶`
+                          : "REVIEW & SUBMIT ▶"}
+                      </button>
+                    </div>
                   ) : (
                     <div className="border border-bbx-accent/40 bg-bbx-accent/5 p-4 animate-slide-up">
                       <p className="text-bbx-text text-sm font-semibold tracking-[0.14em]">
-                        ▸ CONFIRM SUBMISSION
+                        ▸ {editMode ? "CONFIRM UPDATE" : "CONFIRM SUBMISSION"}
                       </p>
                       <p className="text-[11px] text-bbx-subtext mt-1.5 tracking-wide">
-                        Once submitted, today&apos;s answers will be{" "}
-                        <span className="text-bbx-accent">LOCKED</span>. Your
-                        manager can still override.
+                        {editMode
+                          ? "Your new answers will replace today's. You can edit again later if needed."
+                          : "You're submitting today's check-in. You can still edit anytime today if something changes."}
                       </p>
                       <div className="flex gap-2 mt-4">
                         <button
@@ -494,19 +562,16 @@ export default function PublicMemberPage() {
                           disabled={submitting}
                           className="bbx-btn flex-1"
                         >
-                          {submitting ? "SUBMIT…" : "CONFIRM & LOCK ▶"}
+                          {submitting
+                            ? "SAVING…"
+                            : editMode
+                            ? "UPDATE ▶"
+                            : "CONFIRM ▶"}
                         </button>
                       </div>
                     </div>
                   )}
                 </div>
-              )}
-
-              {isLocked && (
-                <p className="px-4 py-3 text-[11px] text-bbx-dim text-center tracking-wide border-t border-bbx-line">
-                  Need to change something? Ping your manager — they can edit
-                  it.
-                </p>
               )}
             </div>
           )}
@@ -791,6 +856,12 @@ function TaskRow({
     );
   }
 
+  // Subtle age hint — only for open tasks that have been sitting for 3+ days.
+  // Helps people notice stale work without nagging.
+  const ageDays =
+    task.status !== "done" && task.created_at ? daysAgo(task.created_at) : 0;
+  const showAge = ageDays >= 3;
+
   return (
     <div className="flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0 group hover:bg-bbx-panel2/40 transition-colors">
       <button
@@ -805,13 +876,23 @@ function TaskRow({
         {task.status === "done" ? "✓" : ""}
       </button>
       <span
-        className={`text-sm flex-1 transition-all ${
+        className={`text-sm flex-1 transition-all min-w-0 ${
           task.status === "done"
             ? "line-through text-bbx-dim"
             : "text-bbx-text"
         }`}
       >
         {task.title}
+        {showAge && (
+          <span
+            className={`ml-2 text-[10px] tracking-[0.14em] tabular-nums ${
+              ageDays >= 7 ? "text-bbx-warn" : "text-bbx-dim"
+            }`}
+            title={`Added ${ageDays} days ago`}
+          >
+            · {ageDays}D
+          </span>
+        )}
       </span>
       <button
         onClick={startEdit}
