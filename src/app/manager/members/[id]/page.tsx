@@ -64,6 +64,7 @@ export default function MemberDetailPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -218,17 +219,38 @@ export default function MemberDetailPage() {
           <TasksEditor tasks={tasks} memberId={member.id} onChange={fetchData} />
         </Panel>
 
-        {/* QUESTION TEMPLATE */}
-        <Panel
-          title={`CHECK-IN TEMPLATE // ${activeQuestions.length} Q`}
-          subtitle={`fresh form for ${member.name} every morning`}
-        >
-          <QuestionsEditor
-            questions={questions}
-            memberId={member.id}
-            onChange={fetchData}
-          />
-        </Panel>
+        {/* QUESTION TEMPLATE — collapsed by default; rarely changes */}
+        <div>
+          <button
+            onClick={() => setShowTemplate((s) => !s)}
+            className="bbx-panel w-full px-4 py-3 flex items-center justify-between hover:border-bbx-accent transition-colors"
+          >
+            <div className="text-left flex items-center gap-2 min-w-0">
+              <span className="text-bbx-accent">▸</span>
+              <span className="text-xs tracking-[0.18em] uppercase text-bbx-text">
+                CHECK-IN TEMPLATE // {activeQuestions.length} Q
+              </span>
+              <span className="text-bbx-dim normal-case tracking-normal text-[10px] truncate hidden sm:inline">
+                · fresh form for {member.name} every morning
+              </span>
+            </div>
+            <span className="text-bbx-dim text-xs tracking-[0.18em] uppercase shrink-0">
+              {showTemplate ? "HIDE ▲" : "SHOW ▼"}
+            </span>
+          </button>
+
+          {showTemplate && (
+            <div className="mt-3">
+              <Panel title={`CHECK-IN TEMPLATE // ${activeQuestions.length} Q`}>
+                <QuestionsEditor
+                  questions={questions}
+                  memberId={member.id}
+                  onChange={fetchData}
+                />
+              </Panel>
+            </div>
+          )}
+        </div>
 
         {/* HISTORY */}
         <div>
@@ -633,24 +655,24 @@ function QuestionsEditor({
           key={q.id}
           className="flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0"
         >
-          <span className="text-[10px] text-bbx-dim tracking-[0.18em] w-7">
+          <span className="text-[11px] text-bbx-subtext tracking-[0.18em] font-semibold w-7">
             Q{String(idx + 1).padStart(2, "0")}
           </span>
           <div className="flex-1 min-w-0">
             <p
-              className={`text-sm ${
+              className={`text-[15px] font-medium ${
                 q.active ? "text-bbx-text" : "text-bbx-dim line-through"
               }`}
             >
               {q.label}
             </p>
             <span
-              className={`inline-block text-[9px] font-semibold tracking-[0.18em] mt-1 px-1.5 py-0.5 border border-bbx-line ${
+              className={`inline-block text-[10px] font-semibold tracking-[0.18em] mt-1.5 px-1.5 py-0.5 border ${
                 q.type === "number"
-                  ? "text-bbx-accent"
+                  ? "text-bbx-accent border-bbx-accent/40 bg-bbx-accent/10"
                   : q.type === "yes_no"
-                  ? "text-bbx-warn"
-                  : "text-bbx-subtext"
+                  ? "text-bbx-warn border-bbx-warn/40 bg-bbx-warn/10"
+                  : "text-bbx-text border-bbx-line bg-bbx-panel2"
               }`}
             >
               {q.type === "yes_no" ? "YES/NO" : q.type.toUpperCase()}
