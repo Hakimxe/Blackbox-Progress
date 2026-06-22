@@ -217,6 +217,67 @@ export default function PublicMemberPage() {
     }
   }
 
+  async function addTask(title: string) {
+    if (!slug || !data) return;
+    const clean = title.trim();
+    if (!clean) return;
+    try {
+      const res = await fetch(`/api/public/${slug}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: clean }),
+      });
+      if (!res.ok) throw new Error("failed");
+      const created: Task = await res.json();
+      setData((cur) =>
+        cur ? { ...cur, tasks: [...cur.tasks, created] } : cur
+      );
+    } catch {
+      // ignore — user can retry
+    }
+  }
+
+  async function editTask(t: Task, title: string) {
+    if (!slug || !data) return;
+    const clean = title.trim();
+    if (!clean || clean === t.title) return;
+    const prevTasks = data.tasks;
+    setData({
+      ...data,
+      tasks: data.tasks.map((x) =>
+        x.id === t.id ? { ...x, title: clean } : x
+      ),
+    });
+    try {
+      const res = await fetch(`/api/public/${slug}/tasks/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: clean }),
+      });
+      if (!res.ok) throw new Error("rollback");
+    } catch {
+      setData((cur) => (cur ? { ...cur, tasks: prevTasks } : cur));
+    }
+  }
+
+  async function deleteTask(t: Task) {
+    if (!slug || !data) return;
+    if (!confirm(`Delete task "${t.title}"?`)) return;
+    const prevTasks = data.tasks;
+    setData({
+      ...data,
+      tasks: data.tasks.filter((x) => x.id !== t.id),
+    });
+    try {
+      const res = await fetch(`/api/public/${slug}/tasks/${t.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("rollback");
+    } catch {
+      setData((cur) => (cur ? { ...cur, tasks: prevTasks } : cur));
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center text-sm text-bbx-dim">
@@ -452,49 +513,37 @@ export default function PublicMemberPage() {
         </Panel>
 
         {/* TASKS */}
-        {tasks.length > 0 && (
-          <Panel
-            title={`TASKS // ${doneTasks}/${tasks.length}`}
-            subtitle="tick as you go"
-          >
-            <div>
-              {tasks.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => toggleTask(t)}
-                  className="w-full flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0 text-left hover:bg-bbx-panel2/40 transition-colors group"
-                >
-                  <div
-                    className={`h-5 w-5 border grid place-items-center text-[11px] shrink-0 transition-all ${
-                      t.status === "done"
-                        ? "bg-bbx-good border-bbx-good text-bbx-bg animate-pop"
-                        : "border-bbx-line group-hover:border-bbx-accent"
-                    }`}
-                  >
-                    {t.status === "done" ? "✓" : ""}
-                  </div>
-                  <span
-                    className={`text-sm flex-1 transition-all ${
-                      t.status === "done"
-                        ? "line-through text-bbx-dim"
-                        : "text-bbx-text"
-                    }`}
-                  >
-                    {t.title}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {allTasksDone && (
-              <div className="p-4 border-t border-bbx-line bg-bbx-good/10 text-center">
-                <p className="text-bbx-good text-sm font-semibold tracking-[0.14em]">
-                  ✓ ALL TASKS COMPLETE
-                </p>
-              </div>
+        <Panel
+          title={`TASKS // ${doneTasks}/${tasks.length}`}
+          subtitle="tick as you go · add / edit your own"
+        >
+          <div>
+            {tasks.length === 0 && (
+              <p className="text-sm text-bbx-dim p-5">
+                No tasks yet. Add one below.
+              </p>
             )}
-          </Panel>
-        )}
+            {tasks.map((t) => (
+              <TaskRow
+                key={t.id}
+                task={t}
+                onToggle={() => toggleTask(t)}
+                onSave={(title) => editTask(t, title)}
+                onDelete={() => deleteTask(t)}
+              />
+            ))}
+          </div>
+
+          <AddTaskRow onAdd={addTask} />
+
+          {allTasksDone && tasks.length > 0 && (
+            <div className="p-4 border-t border-bbx-line bg-bbx-good/10 text-center">
+              <p className="text-bbx-good text-sm font-semibold tracking-[0.14em]">
+                ✓ ALL TASKS COMPLETE
+              </p>
+            </div>
+          )}
+        </Panel>
 
         {/* HISTORY */}
         {data.checkins.length > 1 && (
@@ -678,5 +727,168 @@ function YesterdayRecap({
         )}
       </div>
     </Panel>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERSONAL TASK ROW — tick / edit / delete
+// ─────────────────────────────────────────────────────────────────────────────
+function TaskRow({
+  task,
+  onToggle,
+  onSave,
+  onDelete,
+}: {
+  task: Task;
+  onToggle: () => void;
+  onSave: (title: string) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.title);
+
+  function startEdit() {
+    setDraft(task.title);
+    setEditing(true);
+  }
+
+  function commit() {
+    const clean = draft.trim();
+    if (!clean) {
+      setEditing(false);
+      setDraft(task.title);
+      return;
+    }
+    onSave(clean);
+    setEditing(false);
+  }
+
+  function cancel() {
+    setEditing(false);
+    setDraft(task.title);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-bbx-line last:border-0 bg-bbx-panel2/40">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") cancel();
+          }}
+          className="bbx-input flex-1"
+        />
+        <button onClick={commit} className="bbx-btn">
+          SAVE
+        </button>
+        <button onClick={cancel} className="bbx-btn-ghost">
+          CANCEL
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0 group hover:bg-bbx-panel2/40 transition-colors">
+      <button
+        onClick={onToggle}
+        aria-label="Toggle done"
+        className={`h-5 w-5 border grid place-items-center text-[11px] shrink-0 transition-all ${
+          task.status === "done"
+            ? "bg-bbx-good border-bbx-good text-bbx-bg animate-pop"
+            : "border-bbx-line hover:border-bbx-accent"
+        }`}
+      >
+        {task.status === "done" ? "✓" : ""}
+      </button>
+      <span
+        className={`text-sm flex-1 transition-all ${
+          task.status === "done"
+            ? "line-through text-bbx-dim"
+            : "text-bbx-text"
+        }`}
+      >
+        {task.title}
+      </span>
+      <button
+        onClick={startEdit}
+        className="text-[10px] tracking-[0.18em] uppercase text-bbx-dim hover:text-bbx-accent opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Edit task"
+      >
+        EDIT
+      </button>
+      <button
+        onClick={onDelete}
+        className="text-bbx-dim hover:text-bbx-bad text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        aria-label="Delete task"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADD TASK ROW (personal page)
+// ─────────────────────────────────────────────────────────────────────────────
+function AddTaskRow({ onAdd }: { onAdd: (title: string) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+
+  function commit() {
+    const clean = title.trim();
+    if (!clean) {
+      setAdding(false);
+      setTitle("");
+      return;
+    }
+    onAdd(clean);
+    setTitle("");
+    setAdding(false);
+  }
+
+  return (
+    <div className="p-3 bg-bbx-panel2/40 border-t border-bbx-line">
+      {adding ? (
+        <div className="flex gap-2">
+          <input
+            autoFocus
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape") {
+                setAdding(false);
+                setTitle("");
+              }
+            }}
+            placeholder="new task title"
+            className="bbx-input flex-1"
+          />
+          <button onClick={commit} className="bbx-btn">
+            ADD
+          </button>
+          <button
+            onClick={() => {
+              setAdding(false);
+              setTitle("");
+            }}
+            className="bbx-btn-ghost"
+          >
+            CANCEL
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAdding(true)}
+          className="text-xs tracking-[0.12em] uppercase text-bbx-dim hover:text-bbx-accent"
+        >
+          + ADD TASK
+        </button>
+      )}
+    </div>
   );
 }

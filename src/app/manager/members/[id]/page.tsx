@@ -210,10 +210,10 @@ export default function MemberDetailPage() {
           onChange={fetchData}
         />
 
-        {/* TASKS */}
+        {/* TASKS — read-only for manager; the member owns this list */}
         <Panel
-          title={`TASKS // ${tasksDone}/${tasks.length}`}
-          subtitle="what this person owns"
+          title={`TASKS // ${tasks.length}`}
+          subtitle="what this person is working on"
         >
           <TasksEditor tasks={tasks} memberId={member.id} onChange={fetchData} />
         </Panel>
@@ -507,44 +507,19 @@ function TasksEditor({
     onChange();
   }
 
-  async function setStatus(id: number, status: Task["status"]) {
-    await fetch(`/api/tasks/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    onChange();
-  }
-
-  async function del(id: number) {
-    if (!confirm("Delete this task?")) return;
-    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-    onChange();
-  }
-
   return (
     <div>
       {tasks.length === 0 && (
         <p className="text-sm text-bbx-dim p-5">No tasks yet.</p>
       )}
-      {tasks.map((t) => (
+      {tasks.map((t, idx) => (
         <div
           key={t.id}
-          className="flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0 group"
+          className="flex items-center gap-3 px-4 py-3 border-b border-bbx-line last:border-0"
         >
-          <button
-            onClick={() =>
-              setStatus(t.id, t.status === "done" ? "todo" : "done")
-            }
-            className={`h-5 w-5 border grid place-items-center text-[11px] shrink-0 transition-all ${
-              t.status === "done"
-                ? "bg-bbx-good border-bbx-good text-bbx-bg"
-                : "border-bbx-line hover:border-bbx-accent"
-            }`}
-            aria-label="Toggle done"
-          >
-            {t.status === "done" ? "✓" : ""}
-          </button>
+          <span className="text-[10px] text-bbx-dim tracking-[0.18em] w-7 shrink-0">
+            T{String(idx + 1).padStart(2, "0")}
+          </span>
           <div className="flex-1 min-w-0">
             <p
               className={`text-sm ${
@@ -556,22 +531,11 @@ function TasksEditor({
               {t.title}
             </p>
           </div>
-          <select
-            value={t.status}
-            onChange={(e) => setStatus(t.id, e.target.value as Task["status"])}
-            className="bbx-input !w-auto !py-1 !px-2 text-[10px] tracking-[0.12em] uppercase"
-          >
-            <option value="todo">TO DO</option>
-            <option value="doing">IN PROGRESS</option>
-            <option value="done">DONE</option>
-          </select>
-          <button
-            onClick={() => del(t.id)}
-            className="text-bbx-dim hover:text-bbx-bad text-xs px-1"
-            aria-label="Delete task"
-          >
-            ✕
-          </button>
+          {t.status === "done" && (
+            <span className="text-[10px] tracking-[0.18em] text-bbx-good">
+              ✓ DONE
+            </span>
+          )}
         </div>
       ))}
 
